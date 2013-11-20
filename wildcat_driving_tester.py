@@ -44,6 +44,11 @@ def load_image(file):
         raise SystemExit('Could not load image "%s" %s'%(file, pygame.get_error()))
     return surface.convert()
 
+def load_images(*files):
+    imgs = []
+    for file in files:
+        imgs.append(load_image(file))
+    return imgs
 
 # Function to draw the background
 def draw_background(screen):
@@ -186,18 +191,37 @@ class WildCat(pygame.sprite.Sprite):
 
 class LS3(pygame.sprite.Sprite):
     defaultlife = 3
+    ticksperimg = int(1 * FPS)
     images = []
     def __init__(self,p0):
         pygame.sprite.Sprite.__init__(self, self.containers)
-        self.image = self.image[0]
+        self.image = self.images[0]
         self.rect = self.image.get_rect()
         self.rect.centerx = p0[0]
         self.rect.centery = p0[1]
         self.life = self.defaultlife
+        self.lr = random.choice((-1,1)) * 2
+        self.ud = random.choice((-1,1)) * 1
+        # Keep track of which
+        self.frame = 0
+        self.iidx  = 0
 
     def update(self):
         ''' Update the LS3 position here! '''
-        self.life -= 1
+        SCREENRECT = pygame.Rect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)
+        self.frame += 1
+        self.rect.move_ip(self.lr,self.ud)
+        if not SCREENRECT.contains(self.rect):
+            self.lr = -math.copysign(random.randint(0,2),self.lr)
+            self.ud = -math.copysign(random.randint(0,2),self.ud)
+            self.rect = self.rect.clamp(SCREENRECT)
+        if self.lr <= 0:
+            _dir = 0
+        elif self.lr > 0:
+            _dir = 2
+
+        #print "LS3 : lr % d, ud % d, frame %d" % (self.lr,self.ud,self.frame//self.ticksperimg%2 + _dir)
+        self.image = self.images[self.frame//self.ticksperimg%2 + _dir]
 
         if self.life <= 0: self.kill()
 
@@ -280,7 +304,8 @@ def main():
 
     # Load images, assign to sprite classes
     # (do this before the classes are used, but after the screen is setup).
-    LS3.images = [load_image('LS3_clipart.png')]
+    img = load_images('LS3_FLHR_small.png','LS3_FRHL_small.png')
+    LS3.images = img + [pygame.transform.flip(im, 1, 0) for im in img]
     img = load_image('explosion1.gif')
     Explosion.images = [img, pygame.transform.flip(img, 1, 1)]
 
@@ -298,7 +323,7 @@ def main():
 
     #assign default groups to each sprite class
     LS3.containers    = ls3s, allsprite, lastls3
-    Laser.containers  = lasers, allsprite
+    #Laser.containers  = lasers, allsprite
 
     # Set up a font for rendering text:
     myFont = pygame.font.Font(pygame.font.match_font("consolas"),16)
@@ -331,8 +356,10 @@ def main():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT or \
-                    (event.type == pygame.KEYDOWN and event.key == K_ESCAPE):
+                    (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 done=True
+            if (event.type == pygame.KEYDOWN and event.key == pygame.K_l):
+                LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
 
         # Decorate the game window
         pygame.display.set_caption("FPS: %.2f" % (clock.get_fps()))
@@ -346,7 +373,11 @@ def main():
                 lasers.append( Laser((m2px(wildcat.pos[0]),m2px(wildcat.pos[1])), wildcat.yaw, 
                                      laser_vel, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)) )
 
-            dt = clock.get_time() / 1000.0
+        dt = clock.get_time() / 1000.0
+
+        #allsprite.clear(screen,
+
+        allsprite.update()
 
         draw_background(screen)
         draw_grid(screen)
@@ -358,6 +389,11 @@ def main():
             l.update(dt)
             if l.oob:
                 lasers.remove(l)
+
+                
+        dirty = allsprite.draw(screen)
+        #print dirty
+        pygame.display.update(dirty)
 
         draw_border(screen)
 
