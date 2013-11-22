@@ -1,9 +1,9 @@
 import pygame
-import math, random, os.path
+import math, random, os.path, copy
 import numpy
 from collections import deque
 from bdi.robots.wildcat.wildcat_utils import *
-from wildcat_laser import Laser
+#from wildcat_laser import Laser
 from wildcat_driving_helpers import *
 # import pdb
 
@@ -226,6 +226,76 @@ class WildCat(Meter2PixSprite):
         pygame.draw.circle(self._screen,green,[int(xc+xpx),int(yc+ypx)],int(0.5*w),0)
         pygame.draw.circle(self._screen,black,[xpx,ypx],2,0)
 
+class Laser(Meter2PixSprite):
+    """
+    Lasers for the wildcat robot
+    """
+
+    def __init__(self,actor,vel,screen,clock):
+        Meter2PixSprite.__init__(self)
+        # Create an empty surface for this Laser sprite
+        self.image = pygame.Surface((1,1))
+        self.rect = pygame.Rect(actor.pospx,(3,3))
+        self.rect.center = actor.pospx
+
+        self._pos = copy.deepcopy(actor.pos)
+        self._convert_pos()
+
+        self._screen = screen
+        self._clock  = clock
+        self._yaw = actor.yaw
+        self._vel = self.__rot2d((max(vel,20),0))
+        self._age = 0
+
+        self._oob = False
+
+        actor.reload()
+
+        #print "Laser created at ", self.rect.center
+
+    @property
+    def oob(self):
+        return self._oob
+
+    @property
+    def age(self):
+        return self._age
+
+    def update(self):
+        dt = self._clock.get_time() / 1000.0
+        self._age += dt
+
+        dx = self._vel[0] * dt;
+        dy = self._vel[1] * dt;
+
+        self._pos[0] += dx
+        self._pos[1] += dy
+
+        self._convert_pos()
+        self.rect.center = self.pospx
+
+        self.draw()
+
+        self.__check_oob()
+        if self.oob:
+            self.kill()
+
+    def draw(self):
+        (px,py) = self.__rot2d([12,0])
+        px += self.rect.centerx
+        py += self.rect.centery
+
+        pygame.draw.lines(self._screen, (255,0,0),False,[self.rect.center,[px,py]],2)
+
+    def __rot2d(self,p):
+        x_out = math.cos(self._yaw) * p[0] - math.sin(self._yaw) * p[1]
+        y_out = math.sin(self._yaw) * p[0] + math.cos(self._yaw) * p[1]
+        return (x_out,y_out)
+
+    def __check_oob(self):
+        self._oob = not self._screen.get_rect().collidepoint(self.rect.center)
+
+
 class LS3(Meter2PixSprite):
     defaultlife = 3
     ticksperimg = int(0.5 * FPS)
@@ -358,6 +428,13 @@ def main():
     #pygame.display.set_caption('WildCat driving simulator')
     #pygame.mouse.set_visible(0)
     
+    background = pygame.Surface((SCREEN_WIDTH,SCREEN_HEIGHT))
+    draw_background(background)
+    draw_grid(background)
+    draw_border(background)
+    screen.blit(background, (0,0))
+    pygame.display.flip()
+
     # Initialize Game Groups
     player    = pygame.sprite.GroupSingle()
     ls3s      = pygame.sprite.Group()
@@ -430,47 +507,12 @@ def main():
 
         dt = clock.get_time() / 1000.0
 
-        #allsprite.clear(screen,
+        allsprite.clear(screen, background)
 
         allsprite.update()
 
-        draw_background(screen)
-        draw_grid(screen)
-
         # Draw the item at the proper coordinates
         wildcat.update()
-
-        # dead_laser = []
-        # # Iterate through robots & lasers
-        # for e in ls3s:
-        #     for l in lasers:
-        #         l.pos
-        #         # Check for collisions
-        #         if e.rect.collidepoint(l.pos):
-        #             # if collision has occurred, create an explosion, kill the laser and robot.
-        #             Explosion(e)
-        #             e.kill()
-        #             dead_laser.append(1)
-        #             #lasers.remove(l)
-
-        # while dead_laser:
-        #     l = dead_laser.pop()
-        #     #print lasers
-        #     #print l
-        #     try: lasers.remove(l)
-        #     except: continue
-
-        # for l in lasers:
-        #     l.update(dt)
-        #     if l.oob:
-        #         dead_laser.append(l)
-        #         #lasers.remove(l)
-
-        # while dead_laser:
-        #     l = dead_laser.pop()
-        #     #print lasers
-        #     #print l
-        #     lasers.remove(l)
 
         # Check for laser to robot collisions
         for rbt in pygame.sprite.groupcollide(lasers, ls3s, 1, 1).keys():
@@ -486,10 +528,7 @@ def main():
             l.draw()
                 
         dirty = allsprite.draw(screen)
-        #print dirty
         pygame.display.update(dirty)
-
-        draw_border(screen)
 
 
         # Here we'll display some metrics to the driver:
