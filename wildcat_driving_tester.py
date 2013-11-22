@@ -3,8 +3,8 @@ import math, random, os.path
 import numpy
 from collections import deque
 from bdi.robots.wildcat.wildcat_utils import *
-from bdi.robots.wildcat.steering_tester.wildcat_laser import Laser
-from bdi.robots.wildcat.steering_tester.wildcat_driving_helpers import *
+from wildcat_laser import Laser
+from wildcat_driving_helpers import *
 # import pdb
 
 # Define some colors
@@ -28,7 +28,7 @@ FPS = 30.0
 
 LASER_VEL = 10.0 * PIXELS_PER_METER
 MIN_LASER_AGE = 1/6.0
-robot_thk = 3
+MAX_SHOTS = 10
 
 GRAPH_COLORS = (blue,red,dkgreen,purple)
 
@@ -93,6 +93,7 @@ class WildCat(pygame.sprite.Sprite):
     YVEL_SCALE = 0.5/(1-YDDBAND)
     RZD_SCALE  = 1.0/(1-DBAND)
     N_GRAPHS = 2
+    RELOAD_TIME = 1/6.0
     def __init__(self,joystick,clock):
         pygame.sprite.Sprite.__init__(self)
         self.image = None
@@ -106,6 +107,8 @@ class WildCat(pygame.sprite.Sprite):
 
         (self._xd_d,self._yd_d,self._rzd_d) = (0,0,0)
         self._screen = pygame.display.get_surface()
+
+        self._reload = self.RELOAD_TIME
 
         # Set up the steering classes:
         self.xd_steering  = XdSteering(-3.0,9.5,1.5,0.5,7.0)
@@ -127,8 +130,19 @@ class WildCat(pygame.sprite.Sprite):
         return self._pos
 
     @property
+    def pospx(self):
+        return tuple([m2px(e) for e in self._pos])
+
+    @property
     def yaw(self):
         return self._yaw
+
+    @property
+    def reloading(self):
+        return self._reload >= 0
+
+    def reload(self):
+        self._reload = self.RELOAD_TIME
 
     def update(self):
         # Process joystick commands here
@@ -147,6 +161,10 @@ class WildCat(pygame.sprite.Sprite):
         # Clamp the robot position to the edges of the screen.
         self._pos[0] = saturate(self._pos[0],0,px2m(SCREEN_WIDTH))
         self._pos[1] = saturate(self._pos[1],0,px2m(SCREEN_HEIGHT))
+
+        self._reload -= dt
+        #print self._reload
+        #print self._reload <= 0
 
         # Move the robot
         self.draw()
@@ -232,7 +250,7 @@ class Explosion(pygame.sprite.Sprite):
     images = []
     def __init__(self, actor):
         pygame.sprite.Sprite.__init__(self, self.containers)
-        self.image = images[0]
+        self.image = self.images[0]
         self.rect = self.image.get_rect(center=actor.rect.center)
         self.life = self.defaultlife
 
@@ -322,8 +340,9 @@ def main():
     lastls3   = pygame.sprite.GroupSingle()
 
     #assign default groups to each sprite class
-    LS3.containers    = ls3s, allsprite, lastls3
-    #Laser.containers  = lasers, allsprite
+    LS3.containers       = ls3s, allsprite, lastls3
+    Laser.containers     = lasers, allsprite
+    Explosion.containers = allsprite
 
     # Set up a font for rendering text:
     myFont = pygame.font.Font(pygame.font.match_font("consolas"),16)
@@ -347,12 +366,14 @@ def main():
     clock.tick()
 
     wildcat = WildCat(my_joystick,clock)
-    # Create a container for the lasers.  A simple list with work.
-    lasers = []
+    ### Create a container for the lasers.  A simple list with work.
+    ##lasers = []
 
     done=False
 
-    while done==False:
+    print wildcat.alive()
+
+    while not done: # wildcat.alive():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT or \
@@ -366,12 +387,16 @@ def main():
 
         # As long as there is a joystick
         if joystick_count != 0:
-
-            if (my_joystick.get_button(4) or my_joystick.get_button(5)) and (not lasers or lasers[-1].age >= MIN_LASER_AGE):
+            # if (my_joystick.get_button(4) or my_joystick.get_button(5)):
+            #     print "Do no lasers exist?  ", not lasers
+            #     print "There are %d lasers." % len(lasers)
+            #     print wildcat.reloading
+            if (my_joystick.get_button(4) or my_joystick.get_button(5)) and (not wildcat.reloading) and (len(lasers) < MAX_SHOTS):
                 #laser_vel = LASER_VEL+xd_d*PIXELS_PER_METER
                 laser_vel = LASER_VEL
-                lasers.append( Laser((m2px(wildcat.pos[0]),m2px(wildcat.pos[1])), wildcat.yaw, 
-                                     laser_vel, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)) )
+                #lasers.append( Laser((m2px(wildcat.pos[0]),m2px(wildcat.pos[1])), wildcat.yaw, 
+                #                     laser_vel, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)) )
+                Laser(wildcat, laser_vel, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT),clock)
 
         dt = clock.get_time() / 1000.0
 
@@ -384,12 +409,51 @@ def main():
 
         # Draw the item at the proper coordinates
         wildcat.update()
-    
-        for l in lasers:
-            l.update(dt)
-            if l.oob:
-                lasers.remove(l)
 
+        # dead_laser = []
+        # # Iterate through robots & lasers
+        # for e in ls3s:
+        #     for l in lasers:
+        #         l.pos
+        #         # Check for collisions
+        #         if e.rect.collidepoint(l.pos):
+        #             # if collision has occurred, create an explosion, kill the laser and robot.
+        #             Explosion(e)
+        #             e.kill()
+        #             dead_laser.append(1)
+        #             #lasers.remove(l)
+
+        # while dead_laser:
+        #     l = dead_laser.pop()
+        #     #print lasers
+        #     #print l
+        #     try: lasers.remove(l)
+        #     except: continue
+
+        # for l in lasers:
+        #     l.update(dt)
+        #     if l.oob:
+        #         dead_laser.append(l)
+        #         #lasers.remove(l)
+
+        # while dead_laser:
+        #     l = dead_laser.pop()
+        #     #print lasers
+        #     #print l
+        #     lasers.remove(l)
+
+        # Check for laser to robot collisions
+        for rbt in pygame.sprite.groupcollide(lasers, ls3s, 1, 1).keys():
+            Explosion(rbt)
+
+        # Check for wildcat to robot collisions
+        for rbt in pygame.sprite.spritecollide(wildcat, ls3s, 1):
+            Explosion(wildcat)
+            Explosion(rbt)
+            wildcat.kill()
+
+        for l in lasers:
+            l.draw()
                 
         dirty = allsprite.draw(screen)
         #print dirty
@@ -423,6 +487,8 @@ def main():
 
         pygame.display.flip()
         clock.tick(FPS)
+
+    print lasers
 
     pygame.quit()
 
