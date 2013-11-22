@@ -80,10 +80,29 @@ def px2m(val):
 
 
 ### Define some classes here for the different sprite types.
+class Meter2PixSprite(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self,self.containers)
+
+        # Initialize some base members
+        self._pospx = (0,0)
+        self._pos   = [0,0]
+
+    @property
+    def pospx(self):
+        return self._pospx
+
+    def pos(self):
+        return self._pos
+
+    def _convert_pos(self):
+        self._pospx = tuple([m2px(x) for x in self._pos])
+        
+
 
 # The WildCat object isn't a true sprite type because it doesn't use an image to draw itself, 
 # but it works for now
-class WildCat(pygame.sprite.Sprite):
+class WildCat(Meter2PixSprite):
     RZAXIS = 0
     XAXIS  = 3
     YAXIS  = 4
@@ -95,7 +114,7 @@ class WildCat(pygame.sprite.Sprite):
     N_GRAPHS = 2
     RELOAD_TIME = 1/6.0
     def __init__(self,joystick,clock):
-        pygame.sprite.Sprite.__init__(self)
+        Meter2PixSprite.__init__(self)
         self.image = None
         self._joy = joystick
         self._clock = clock
@@ -103,7 +122,8 @@ class WildCat(pygame.sprite.Sprite):
         self._pos = [px2m(0.5*SCREEN_WIDTH),px2m(0.5*SCREEN_HEIGHT)]
         self._yaw = -math.pi/2
 
-        self.rect = pygame.Rect((m2px(self._pos[0]),m2px(self._pos[1])),(0,0))
+        self._convert_pos()
+        self.rect = pygame.Rect(self.pospx,(0,0))
 
         (self._xd_d,self._yd_d,self._rzd_d) = (0,0,0)
         self._screen = pygame.display.get_surface()
@@ -163,8 +183,8 @@ class WildCat(pygame.sprite.Sprite):
         self._pos[1] = saturate(self._pos[1],0,px2m(SCREEN_HEIGHT))
 
         self._reload -= dt
-        #print self._reload
-        #print self._reload <= 0
+
+        self._convert_pos()
 
         # Move the robot
         self.draw()
@@ -189,6 +209,7 @@ class WildCat(pygame.sprite.Sprite):
 
     def draw(self):
         ''' This is where the drawing of the robot actually happens!'''
+        (xpx,ypx) = self.pospx
         # Setup the robot base drawing:
         (l,w) = (m2px(1.4),m2px(0.6))
         pts = [] # start with empty list
@@ -196,8 +217,6 @@ class WildCat(pygame.sprite.Sprite):
         pts.append([-0.5*l, 0.5*w])
         pts.append([-0.5*l,-0.5*w])
         pts.append([ 0.5*l,-0.5*w])
-        # Convert the passed in position in meters to pixels:
-        (xpx,ypx) = [m2px(x) for x in self._pos]
         # Transform the robot from robot coords to world coords:
         for p in pts:
             (xn,yn) = rot2d(self._yaw,p)
@@ -207,31 +226,37 @@ class WildCat(pygame.sprite.Sprite):
         pygame.draw.circle(self._screen,green,[int(xc+xpx),int(yc+ypx)],int(0.5*w),0)
         pygame.draw.circle(self._screen,black,[xpx,ypx],2,0)
 
-class LS3(pygame.sprite.Sprite):
+class LS3(Meter2PixSprite):
     defaultlife = 3
-    ticksperimg = int(1 * FPS)
+    ticksperimg = int(0.5 * FPS)
     images = []
     def __init__(self,p0):
-        pygame.sprite.Sprite.__init__(self, self.containers)
+        Meter2PixSprite.__init__(self)
         self.image = self.images[0]
         self.rect = self.image.get_rect()
-        self.rect.centerx = p0[0]
-        self.rect.centery = p0[1]
+        self._pos = [px2m(x) for x in p0]
+        self._convert_pos()
+        self.rect.center = self.pospx
         self.life = self.defaultlife
-        self.lr = random.choice((-1,1)) * 2
-        self.ud = random.choice((-1,1)) * 1
-        # Keep track of which
+        self.lr = random.choice((-1,1)) * random.random() * 1.4
+        self.ud = random.choice((-1,1)) * random.random() * 1.4
+        # Keep track of which image we're on.
         self.frame = 0
-        self.iidx  = 0
+
+        self._xfilt = Filter2ndOrder(1.0/FPS,0.5)
+        self._yfilt = Filter2ndOrder(1.0/FPS,0.5)
 
     def update(self):
         ''' Update the LS3 position here! '''
         SCREENRECT = pygame.Rect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)
         self.frame += 1
-        self.rect.move_ip(self.lr,self.ud)
+        self._pos[0] += self.lr / FPS
+        self._pos[1] += self.ud / FPS
+        self._convert_pos()
+        self.rect.center = self.pospx
         if not SCREENRECT.contains(self.rect):
-            self.lr = -math.copysign(random.randint(0,2),self.lr)
-            self.ud = -math.copysign(random.randint(0,2),self.ud)
+            self.lr = -math.copysign(random.random()*1.4,self.lr)
+            self.ud = -math.copysign(random.random()*1.4,self.ud)
             self.rect = self.rect.clamp(SCREENRECT)
         if self.lr <= 0:
             _dir = 0
@@ -334,12 +359,14 @@ def main():
     #pygame.mouse.set_visible(0)
     
     # Initialize Game Groups
+    player    = pygame.sprite.GroupSingle()
     ls3s      = pygame.sprite.Group()
     lasers    = pygame.sprite.Group()
     allsprite = pygame.sprite.RenderUpdates()
     lastls3   = pygame.sprite.GroupSingle()
 
     #assign default groups to each sprite class
+    WildCat.containers   = player
     LS3.containers       = ls3s, allsprite, lastls3
     Laser.containers     = lasers, allsprite
     Explosion.containers = allsprite
@@ -382,6 +409,9 @@ def main():
             if (event.type == pygame.KEYDOWN and event.key == pygame.K_l):
                 LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
 
+        keystate = pygame.key.get_pressed()
+
+
         # Decorate the game window
         pygame.display.set_caption("FPS: %.2f" % (clock.get_fps()))
 
@@ -391,7 +421,7 @@ def main():
             #     print "Do no lasers exist?  ", not lasers
             #     print "There are %d lasers." % len(lasers)
             #     print wildcat.reloading
-            if (my_joystick.get_button(4) or my_joystick.get_button(5)) and (not wildcat.reloading) and (len(lasers) < MAX_SHOTS):
+            if (my_joystick.get_button(4) or my_joystick.get_button(5) or keystate[pygame.K_SPACE]) and (not wildcat.reloading) and (len(lasers) < MAX_SHOTS):
                 #laser_vel = LASER_VEL+xd_d*PIXELS_PER_METER
                 laser_vel = LASER_VEL
                 #lasers.append( Laser((m2px(wildcat.pos[0]),m2px(wildcat.pos[1])), wildcat.yaw, 

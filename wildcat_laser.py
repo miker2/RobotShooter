@@ -7,11 +7,14 @@ class Laser(pygame.sprite.Sprite):
     """
 
     def __init__(self,actor,vel,screen,clock):
-        pygame.sprite.Sprite.__init__(self, self.containers)
+        Meter2PixSprite.__init__(self)
         # Create an empty surface for this Laser sprite
         self.image = pygame.Surface((1,1))
         self.rect = pygame.Rect(actor.pospx,(3,3))
         self.rect.center = actor.pospx
+
+        self._pos = actor.pos
+        self._convert_pos()
 
         self._screen = screen
         self._clock  = clock
@@ -33,10 +36,6 @@ class Laser(pygame.sprite.Sprite):
     def age(self):
         return self._age
 
-    @property
-    def pos(self):
-        return self.rect.center
-
     def update(self):
         dt = self._clock.get_time() / 1000.0
         self._age += dt
@@ -44,7 +43,11 @@ class Laser(pygame.sprite.Sprite):
         dx = self._vel[0] * dt;
         dy = self._vel[1] * dt;
 
-        self.rect.move_ip(dx,dy)
+        self._pos[0] += dx
+        self._pos[1] += dy
+
+        self._convert_pos()
+        self.rect.center = self.pospx
 
         self.draw()
 
