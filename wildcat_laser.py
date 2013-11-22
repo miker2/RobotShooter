@@ -1,7 +1,8 @@
 import pygame
 import math
+#from wildcat_driving_tester import Meter2PixSprite
 
-class Laser(pygame.sprite.Sprite):
+class Laser(Meter2PixSprite):
     """
     Lasers for the wildcat robot
     """
