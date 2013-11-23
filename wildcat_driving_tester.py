@@ -2,7 +2,7 @@ import pygame
 import math, random, os.path, copy
 import numpy
 from collections import deque
-from bdi.robots.wildcat.wildcat_utils import *
+from wildcat_utils import *
 #from wildcat_laser import Laser
 from wildcat_driving_helpers import *
 # import pdb
@@ -35,19 +35,24 @@ GRAPH_COLORS = (blue,red,dkgreen,purple)
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
-def load_image(file):
+def load_image(file, colorkey=None):
     "loads an image, prepares it for play"
     file = os.path.join(main_dir, file)
     try:
         surface = pygame.image.load(file)
-    except pygame.error:
+    except pygame.error, message:
         raise SystemExit('Could not load image "%s" %s'%(file, pygame.get_error()))
-    return surface.convert()
+    image = surface.convert()
+    if colorkey is not None:
+        if colorkey is -1:
+            colorkey = image.get_at((0,0))
+        image.set_colorkey(colorkey, pygame.RLEACCEL)
+    return image
 
 def load_images(*files):
     imgs = []
     for file in files:
-        imgs.append(load_image(file))
+        imgs.append(load_image(file,-1))
     return imgs
 
 # Function to draw the background
@@ -113,9 +118,9 @@ class WildCat(Meter2PixSprite):
     RZD_SCALE  = 1.0/(1-DBAND)
     N_GRAPHS = 2
     RELOAD_TIME = 1/6.0
+    DIMS = (m2px(1.4),m2px(0.6))
     def __init__(self,joystick,clock):
         Meter2PixSprite.__init__(self)
-        self.image = None
         self._joy = joystick
         self._clock = clock
 
@@ -123,7 +128,12 @@ class WildCat(Meter2PixSprite):
         self._yaw = -math.pi/2
 
         self._convert_pos()
-        self.rect = pygame.Rect(self.pospx,(0,0))
+        rsize = 2 * math.sqrt(self.DIMS[0]**2+self.DIMS[1]**2)
+        self.rect = pygame.Rect(self.pospx,(rsize,rsize))
+        # Hack together a surface to overwrite our last position.
+        self.image = pygame.Surface(self.rect.size)
+        self.image.fill(white)
+        self.image.set_colorkey(white)
 
         (self._xd_d,self._yd_d,self._rzd_d) = (0,0,0)
         self._screen = pygame.display.get_surface()
@@ -185,7 +195,7 @@ class WildCat(Meter2PixSprite):
         self._reload -= dt
 
         self._convert_pos()
-
+        self.rect.center = self.pospx
         # Move the robot
         self.draw()
 
@@ -211,7 +221,7 @@ class WildCat(Meter2PixSprite):
         ''' This is where the drawing of the robot actually happens!'''
         (xpx,ypx) = self.pospx
         # Setup the robot base drawing:
-        (l,w) = (m2px(1.4),m2px(0.6))
+        (l,w) = self.DIMS
         pts = [] # start with empty list
         pts.append([ 0.5*l, 0.5*w])
         pts.append([-0.5*l, 0.5*w])
@@ -230,21 +240,23 @@ class Laser(Meter2PixSprite):
     """
     Lasers for the wildcat robot
     """
-
-    def __init__(self,actor,vel,screen,clock):
+    LASER_VEL = (10,0) # meters / sec
+    LASER_LEN = 14 # px
+    def __init__(self,actor,screen,clock):
         Meter2PixSprite.__init__(self)
         # Create an empty surface for this Laser sprite
-        self.image = pygame.Surface((1,1))
-        self.rect = pygame.Rect(actor.pospx,(3,3))
+        self.rect = pygame.Rect(actor.pospx,(self.LASER_LEN,self.LASER_LEN))
         self.rect.center = actor.pospx
+        self.image = pygame.Surface(self.rect.size)
+        self.image.set_alpha(0)
 
         self._pos = copy.deepcopy(actor.pos)
         self._convert_pos()
 
         self._screen = screen
         self._clock  = clock
-        self._yaw = actor.yaw
-        self._vel = self.__rot2d((max(vel,20),0))
+        self._vec = rot2d(actor.yaw,(self.LASER_LEN,0))
+        self._vel = rot2d(actor.yaw,self.LASER_VEL)
         self._age = 0
 
         self._oob = False
@@ -281,24 +293,24 @@ class Laser(Meter2PixSprite):
             self.kill()
 
     def draw(self):
-        (px,py) = self.__rot2d([12,0])
+        (px,py) = self._vec
         px += self.rect.centerx
         py += self.rect.centery
 
         pygame.draw.lines(self._screen, (255,0,0),False,[self.rect.center,[px,py]],2)
 
-    def __rot2d(self,p):
-        x_out = math.cos(self._yaw) * p[0] - math.sin(self._yaw) * p[1]
-        y_out = math.sin(self._yaw) * p[0] + math.cos(self._yaw) * p[1]
-        return (x_out,y_out)
-
     def __check_oob(self):
         self._oob = not self._screen.get_rect().collidepoint(self.rect.center)
+
+    def check_collision(laser,actor):
+        return actor.rect.collidepoint(laser.pospx)
 
 
 class LS3(Meter2PixSprite):
     defaultlife = 3
     ticksperimg = int(0.5 * FPS)
+    SCREENRECT = pygame.Rect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)
+    SCREENRECTMETER = pygame.Rect(0,0,px2m(SCREEN_WIDTH),px2m(SCREEN_HEIGHT))
     images = []
     def __init__(self,p0):
         Meter2PixSprite.__init__(self)
@@ -308,29 +320,30 @@ class LS3(Meter2PixSprite):
         self._convert_pos()
         self.rect.center = self.pospx
         self.life = self.defaultlife
-        self.lr = random.choice((-1,1)) * random.random() * 1.4
-        self.ud = random.choice((-1,1)) * random.random() * 1.4
         # Keep track of which image we're on.
         self.frame = 0
 
-        self._xfilt = Filter2ndOrder(1.0/FPS,0.5)
-        self._yfilt = Filter2ndOrder(1.0/FPS,0.5)
+        self._xfilt = Filter2ndOrder(1.0/FPS,0.2)
+        self._yfilt = Filter2ndOrder(1.0/FPS,0.3)
+
+        self._xfilt.filter_val(random.choice([-1,1])*1.4)
+        self._yfilt.filter_val(random.choice([-1,1])*1.4)
 
     def update(self):
         ''' Update the LS3 position here! '''
-        SCREENRECT = pygame.Rect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)
         self.frame += 1
-        self._pos[0] += self.lr / FPS
-        self._pos[1] += self.ud / FPS
+        dx = self._xfilt.filter_val(random.choice([-1,1])*1.4) / FPS
+        dy = self._yfilt.filter_val(random.choice([-1,1])*1.4) / FPS
+        self._pos[0] += dx
+        self._pos[1] += dy
         self._convert_pos()
         self.rect.center = self.pospx
-        if not SCREENRECT.contains(self.rect):
-            self.lr = -math.copysign(random.random()*1.4,self.lr)
-            self.ud = -math.copysign(random.random()*1.4,self.ud)
-            self.rect = self.rect.clamp(SCREENRECT)
-        if self.lr <= 0:
+        if not self.SCREENRECT.contains(self.rect):
+            self.rect = self.rect.clamp(self.SCREENRECT)
+            self._pos = [px2m(self.rect.centerx),px2m(self.rect.centery)]
+        if dx <= 0:
             _dir = 0
-        elif self.lr > 0:
+        elif dx > 0:
             _dir = 2
 
         #print "LS3 : lr % d, ud % d, frame %d" % (self.lr,self.ud,self.frame//self.ticksperimg%2 + _dir)
@@ -419,7 +432,7 @@ def main():
     # (do this before the classes are used, but after the screen is setup).
     img = load_images('LS3_FLHR_small.png','LS3_FRHL_small.png')
     LS3.images = img + [pygame.transform.flip(im, 1, 0) for im in img]
-    img = load_image('explosion1.gif')
+    img = load_image('explosion1.gif',-1)
     Explosion.images = [img, pygame.transform.flip(img, 1, 1)]
 
     # Decorate the game window with things like:
@@ -443,7 +456,7 @@ def main():
     lastls3   = pygame.sprite.GroupSingle()
 
     #assign default groups to each sprite class
-    WildCat.containers   = player
+    WildCat.containers   = allsprite
     LS3.containers       = ls3s, allsprite, lastls3
     Laser.containers     = lasers, allsprite
     Explosion.containers = allsprite
@@ -499,11 +512,7 @@ def main():
             #     print "There are %d lasers." % len(lasers)
             #     print wildcat.reloading
             if (my_joystick.get_button(4) or my_joystick.get_button(5) or keystate[pygame.K_SPACE]) and (not wildcat.reloading) and (len(lasers) < MAX_SHOTS):
-                #laser_vel = LASER_VEL+xd_d*PIXELS_PER_METER
-                laser_vel = LASER_VEL
-                #lasers.append( Laser((m2px(wildcat.pos[0]),m2px(wildcat.pos[1])), wildcat.yaw, 
-                #                     laser_vel, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT)) )
-                Laser(wildcat, laser_vel, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT),clock)
+                Laser(wildcat, screen.subsurface(0,0,SCREEN_WIDTH,SCREEN_HEIGHT), clock)
 
         dt = clock.get_time() / 1000.0
 
@@ -512,20 +521,27 @@ def main():
         allsprite.update()
 
         # Draw the item at the proper coordinates
-        wildcat.update()
+        #wildcat.update()
 
         # Check for laser to robot collisions
-        for rbt in pygame.sprite.groupcollide(lasers, ls3s, 1, 1).keys():
-            Explosion(rbt)
+        #for rbt in pygame.sprite.groupcollide(lasers, ls3s, 1, 1).keys():
+        #    Explosion(rbt)
+        # A bit hacky, but use collidepoint to do collision check.o
+        for l in lasers:
+            for rbt in pygame.sprite.spritecollide(l,ls3s,1,Laser.check_collision):
+                Explosion(rbt)
+                rbt.kill()
+                l.kill()
 
         # Check for wildcat to robot collisions
         for rbt in pygame.sprite.spritecollide(wildcat, ls3s, 1):
             Explosion(wildcat)
             Explosion(rbt)
             wildcat.kill()
+            rbt.kill()
 
-        for l in lasers:
-            l.draw()
+        #for l in lasers:
+        #    l.draw()
                 
         dirty = allsprite.draw(screen)
         pygame.display.update(dirty)
