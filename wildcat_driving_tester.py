@@ -26,9 +26,11 @@ GRID_SPACING = int(5.0 * PIXELS_PER_METER);
 
 FPS = 30.0
 
-LASER_VEL = 10.0 * PIXELS_PER_METER
 MIN_LASER_AGE = 1/6.0
 MAX_SHOTS = 10
+
+LS3_ODDS   = 22 # Chances a new LS3 appears
+LS3_RELOAD = int(2 * FPS) # Frames between new LS3s
 
 GRAPH_COLORS = (blue,red,dkgreen,purple)
 
@@ -365,7 +367,11 @@ class LS3(Meter2PixSprite):
         elif dx > 0:
             _dir = 2
 
-        #print "LS3 : lr % d, ud % d, frame %d" % (self.lr,self.ud,self.frame//self.ticksperimg%2 + _dir)
+        # TODO: Add a bias into the LS3 velocity that causes them to walk toward
+        # the wildcat robot
+        # TODO: Fix jitter in image. Maybe do this by not changing the _dir variable
+        # unless the value of self.frame//self.ticksperimg%2 changes
+
         self.image = self.images[self.frame//self.ticksperimg%2 + _dir]
 
         if self.life <= 0: self.kill()
@@ -483,6 +489,10 @@ def main():
     # Set up a font for rendering text:
     myFont = pygame.font.Font(pygame.font.match_font("consolas"),16)
 
+    #Setup some game variables
+    EasterEggMode = False;
+    Ls3Reload = LS3_RELOAD
+
     # Count the joysticks the computer has
     joystick_count=pygame.joystick.get_count()
     if joystick_count == 0:
@@ -509,20 +519,38 @@ def main():
 
     print wildcat.alive()
 
+    pygame.key.set_repeat() # Disables key repeats.
+
     while not done: # wildcat.alive():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT or \
                     (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 done=True
-            if (event.type == pygame.KEYDOWN and event.key == pygame.K_l):
-                LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                EasterEggMode = not EasterEggMode
 
         keystate = pygame.key.get_pressed()
 
-
         # Decorate the game window
-        pygame.display.set_caption("FPS: %.2f" % (clock.get_fps()))
+        caption = "FPS: %.2f" % (clock.get_fps())
+        if EasterEggMode:
+            caption = caption + "  -  Get the LS3s!"
+            
+            if Ls3Reload:
+                Ls3Reload -= 1
+            elif not int(random.random() * LS3_ODDS):
+                LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
+                Ls3Reload = LS3_RELOAD
+
+
+        pygame.display.set_caption(caption)
+
+
+        
+        #if keystate[pygame.K_l] and EasterEggMode:
+        #        LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
+
 
         # As long as there is a joystick
         if joystick_count != 0:
@@ -539,8 +567,11 @@ def main():
 
         allsprite.update()
 
-        # Draw the item at the proper coordinates
-        #wildcat.update()
+        if not EasterEggMode and len(ls3s) > 0:
+            for rbt in ls3s:
+                Explosion(rbt)
+                rbt.kill()
+            ls3s.empty()
 
         # Check for laser to robot collisions
         #for rbt in pygame.sprite.groupcollide(lasers, ls3s, 1, 1).keys():
