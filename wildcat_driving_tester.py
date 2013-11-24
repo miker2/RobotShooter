@@ -20,8 +20,8 @@ brown    = (0x55,0x33,0x00)
 # Define some constants:
 PIXELS_PER_METER = 15
 
-SCREEN_WIDTH = 1000
-SCREEN_HEIGHT = 800
+SCREEN_WIDTH = 1080
+SCREEN_HEIGHT = 720
 GRID_SPACING = int(5.0 * PIXELS_PER_METER);
 
 FPS = 30.0
@@ -342,24 +342,24 @@ class LS3(Meter2PixSprite):
         # Keep track of which image we're on.
         self.frame = 0
 
-        self._xfilt = Filter2ndOrder(1.0/FPS,0.2)
-        self._yfilt = Filter2ndOrder(1.0/FPS,0.3)
-
-        self._xfilt.filter_val(random.choice([-1,1])*1.4)
-        self._yfilt.filter_val(random.choice([-1,1])*1.4)
+        self._randwalk = copy.deepcopy(self._pos)
+        self._xfilt = Filter2ndOrder(1.0/FPS,0.05)
+        self._yfilt = Filter2ndOrder(1.0/FPS,0.05)
 
     def update(self):
         ''' Update the LS3 position here! '''
         self.frame += 1
-        dx = self._xfilt.filter_val(random.choice([-1,1])*1.4) / FPS
-        dy = self._yfilt.filter_val(random.choice([-1,1])*1.4) / FPS
-        self._pos[0] += dx
-        self._pos[1] += dy
+        self._randwalk[0] += random.choice([-1,1]) * 10.4 / FPS
+        self._randwalk[1] += random.choice([-1,1]) * 10.4 / FPS
+        x_old = self._pos[0]
+        self._pos[0] = self._xfilt.filter_val(self._randwalk[0])
+        self._pos[1] = self._yfilt.filter_val(self._randwalk[1])
         self._convert_pos()
         self.rect.center = self.pospx
         if not self.SCREENRECT.contains(self.rect):
             self.rect = self.rect.clamp(self.SCREENRECT)
             self._pos = [px2m(self.rect.centerx),px2m(self.rect.centery)]
+        dx = self._pos[0] - x_old
         if dx <= 0:
             _dir = 0
         elif dx > 0:
