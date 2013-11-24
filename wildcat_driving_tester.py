@@ -37,13 +37,14 @@ GRAPH_COLORS = (blue,red,dkgreen,purple)
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
-def load_image(file, colorkey=None):
+
+def load_image(filename, colorkey=None):
     "loads an image, prepares it for play"
-    file = os.path.join(main_dir, file)
+    filename = os.path.join(main_dir, filename)
     try:
-        surface = pygame.image.load(file)
+        surface = pygame.image.load(filename)
     except pygame.error, message:
-        raise SystemExit('Could not load image "%s" %s'%(file, pygame.get_error()))
+        raise SystemExit('Could not load image "%s" %s' % (filename, pygame.get_error()))
     image = surface.convert()
     if colorkey is not None:
         if colorkey is -1:
