@@ -128,7 +128,7 @@ class WildCat(Meter2PixSprite):
         self._yaw = -math.pi/2
 
         self._convert_pos()
-        rsize = 2 * math.sqrt(self.DIMS[0]**2+self.DIMS[1]**2)
+        rsize = 2 * max(self.DIMS[0],self.DIMS[1])
         self.rect = pygame.Rect(self.pospx,(rsize,rsize))
         # Hack together a surface to overwrite our last position.
         self.image = pygame.Surface(self.rect.size)
@@ -227,14 +227,33 @@ class WildCat(Meter2PixSprite):
         pts.append([-0.5*l, 0.5*w])
         pts.append([-0.5*l,-0.5*w])
         pts.append([ 0.5*l,-0.5*w])
+        pts.append([ 0.5*l+0.5*w, 0])
         # Transform the robot from robot coords to world coords:
         for p in pts:
             (xn,yn) = rot2d(self._yaw,p)
             p[0] = xn + xpx; p[1] = yn + ypx;
         pygame.draw.polygon(self._screen, blue, pts, 2)
         (xc,yc) = rot2d(self._yaw,(0.5*l,0))
-        pygame.draw.circle(self._screen,green,[int(xc+xpx),int(yc+ypx)],int(0.5*w),0)
+        #pygame.draw.circle(self._screen,green,[int(xc+xpx),int(yc+ypx)],int(0.5*w),0)
         pygame.draw.circle(self._screen,black,[xpx,ypx],2,0)
+        self.create_rect(pts)
+
+
+    def create_rect(self,pts):
+        buf  = 2
+        xmin = xmax = self.rect.centerx
+        ymin = ymax = self.rect.centery
+        for p in pts:
+            xmax = max(xmax,p[0])
+            xmin = min(xmin,p[0])
+            ymax = max(ymax,p[1])
+            ymin = min(ymin,p[1])
+        rect = pygame.Rect((xmin-buf/2,ymin-buf/2),(xmax-xmin+buf,ymax-ymin+buf))
+        self.rect = rect
+        newpts = [rect.bottomleft,rect.topleft,rect.topright,rect.bottomright]
+        pygame.draw.polygon(self._screen,red,newpts,1)
+
+    
 
 class Laser(Meter2PixSprite):
     """
