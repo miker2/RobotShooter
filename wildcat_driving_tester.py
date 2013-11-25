@@ -559,12 +559,6 @@ def main():
 
         pygame.display.set_caption(caption)
 
-
-        
-        #if keystate[pygame.K_l] and EasterEggMode:
-        #        LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
-
-
         # As long as there is a joystick
         if joystick_count != 0:
             # if (my_joystick.get_button(4) or my_joystick.get_button(5)):
