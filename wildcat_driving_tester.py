@@ -1,36 +1,38 @@
-import pygame
-import math, random, os.path, copy
-import numpy
+import random
+import os.path
+import copy
 from collections import deque
-from wildcat_utils import *
-#from wildcat_laser import Laser
+
+import pygame
+
 from wildcat_driving_helpers import *
-# import pdb
+
+
 
 # Define some colors
-black = (   0, 0, 0)
-white = ( 255, 255, 255)
-blue = (  50, 50, 255)
-green = (   0, 255, 0)
-dkgreen = (   0, 100, 0)
-red = ( 255, 0, 0)
-purple = (0xBF, 0x0F, 0xB5)
-brown = (0x55, 0x33, 0x00)
+black   = (   0,   0,   0)
+white   = ( 255, 255, 255)
+blue    = (  50,  50, 255)
+green   = (   0, 255,   0)
+dkgreen = (   0, 100,   0)
+red     = ( 255,   0,   0)
+purple  = (0xBF, 0x0F, 0xB5)
+brown   = (0x55, 0x33, 0x00)
 
 # Define some constants:
 PIXELS_PER_METER = 15
 
 SCREEN_WIDTH = 1080
 SCREEN_HEIGHT = 720
-GRID_SPACING = int(5.0 * PIXELS_PER_METER);
+GRID_SPACING = int(5.0 * PIXELS_PER_METER)
 
 FPS = 30.0
 
 MIN_LASER_AGE = 1 / 6.0
 MAX_SHOTS = 10
 
-LS3_ODDS   = 22 # Chances a new LS3 appears
-LS3_RELOAD = int(2 * FPS) # Frames between new LS3s
+LS3_ODDS   = 22            # Chances a new LS3 appears
+LS3_RELOAD = int(2 * FPS)  # Frames between new LS3s
 
 GRAPH_COLORS = (blue, red, dkgreen, purple)
 
@@ -76,11 +78,10 @@ def draw_grid(screen):
 
 def draw_border(screen):
     # Draw a border around the driving area:
-    pts = []
-    pts.append([0, 0])
-    pts.append([0, SCREEN_HEIGHT])
-    pts.append([SCREEN_WIDTH, SCREEN_HEIGHT])
-    pts.append([SCREEN_WIDTH, 0])
+    pts = [[0, 0],
+           [0, SCREEN_HEIGHT],
+           [SCREEN_WIDTH, SCREEN_HEIGHT],
+           [SCREEN_WIDTH, 0]]
     pygame.draw.lines(screen, brown, True, pts, 5)
 
 
@@ -233,46 +234,41 @@ class WildCat(Meter2PixSprite):
         # Setup the robot base drawing:
         (l, w) = self.DIMS
         pts = [] # start with empty list
-        pts.append([0.5 * l, 0.5 * w])
-        pts.append([-0.5 * l, 0.5 * w])
+        pts.append([ 0.5 * l,  0.5 * w])
+        pts.append([-0.5 * l,  0.5 * w])
         pts.append([-0.5 * l, -0.5 * w])
-        pts.append([0.5 * l, -0.5 * w])
-        pts.append([ 0.5*l+0.5*w, 0])
+        pts.append([ 0.5 * l, -0.5 * w])
+        pts.append([ 0.5 * l + 0.5 * w, 0])
         # Transform the robot from robot coords to world coords:
         for p in pts:
             (xn, yn) = rot2d(self._yaw, p)
-            p[0] = xn + xpx;
-            p[1] = yn + ypx;
+            p[0] = xn + xpx
+            p[1] = yn + ypx
         pygame.draw.polygon(self._screen, blue, pts, 2)
-        (xc, yc) = rot2d(self._yaw, (0.5 * l, 0))
-        #pygame.draw.circle(self._screen,green,[int(xc+xpx),int(yc+ypx)],int(0.5*w),0)
         pygame.draw.circle(self._screen, black, [xpx, ypx], 2, 0)
         self.create_rect(pts)
 
-
-    def create_rect(self,pts):
+    def create_rect(self, pts):
         buf  = 2
         xmin = xmax = self.rect.centerx
         ymin = ymax = self.rect.centery
         for p in pts:
-            xmax = max(xmax,p[0])
-            xmin = min(xmin,p[0])
-            ymax = max(ymax,p[1])
-            ymin = min(ymin,p[1])
-        rect = pygame.Rect((xmin-buf/2,ymin-buf/2),(xmax-xmin+buf,ymax-ymin+buf))
+            xmax = max(xmax, p[0])
+            xmin = min(xmin, p[0])
+            ymax = max(ymax, p[1])
+            ymin = min(ymin, p[1])
+        rect = pygame.Rect((xmin - buf / 2, ymin - buf / 2), (xmax - xmin + buf, ymax - ymin + buf))
         self.rect = rect
-        newpts = [rect.bottomleft,rect.topleft,rect.topright,rect.bottomright]
-        pygame.draw.polygon(self._screen,red,newpts,1)
-
-    
+        #newpts = [rect.bottomleft, rect.topleft, rect.topright, rect.bottomright]
+        #pygame.draw.polygon(self._screen, red, newpts, 1)
 
 
 class Laser(Meter2PixSprite):
     """
     Lasers for the wildcat robot
     """
-    LASER_VEL = (10, 0) # meters / sec
-    LASER_LEN = 14 # px
+    LASER_VEL = (10, 0)  # meters / sec
+    LASER_LEN = 14       # px
 
     def __init__(self, actor, screen, clock):
         Meter2PixSprite.__init__(self)
@@ -309,8 +305,8 @@ class Laser(Meter2PixSprite):
         dt = self._clock.get_time() / 1000.0
         self._age += dt
 
-        dx = self._vel[0] * dt;
-        dy = self._vel[1] * dt;
+        dx = self._vel[0] * dt
+        dy = self._vel[1] * dt
 
         self._pos[0] += dx
         self._pos[1] += dy
@@ -334,8 +330,8 @@ class Laser(Meter2PixSprite):
     def __check_oob(self):
         self._oob = not self._screen.get_rect().collidepoint(self.rect.center)
 
-    def check_collision(laser, actor):
-        return actor.rect.collidepoint(laser.pospx)
+    def check_collision(self, actor):
+        return actor.rect.collidepoint(self.pospx)
 
 
 class LS3(Meter2PixSprite):
@@ -357,14 +353,14 @@ class LS3(Meter2PixSprite):
         self.frame = 0
 
         self._randwalk = copy.deepcopy(self._pos)
-        self._xfilt = Filter2ndOrder(1.0/FPS,0.05)
-        self._yfilt = Filter2ndOrder(1.0/FPS,0.05)
+        self._xfilt = Filter2ndOrder(1.0 / FPS, 0.05)
+        self._yfilt = Filter2ndOrder(1.0 / FPS, 0.05)
 
     def update(self):
         ''' Update the LS3 position here! '''
         self.frame += 1
-        self._randwalk[0] += random.choice([-1,1]) * 10.4 / FPS
-        self._randwalk[1] += random.choice([-1,1]) * 10.4 / FPS
+        self._randwalk[0] += random.choice([-1, 1]) * 10.4 / FPS
+        self._randwalk[1] += random.choice([-1, 1]) * 10.4 / FPS
         x_old = self._pos[0]
         self._pos[0] = self._xfilt.filter_val(self._randwalk[0])
         self._pos[1] = self._yfilt.filter_val(self._randwalk[1])
@@ -376,7 +372,7 @@ class LS3(Meter2PixSprite):
         dx = self._pos[0] - x_old
         if dx <= 0:
             _dir = 0
-        elif dx > 0:
+        else:
             _dir = 2
 
         # TODO: Add a bias into the LS3 velocity that causes them to walk toward
@@ -401,7 +397,7 @@ class Explosion(pygame.sprite.Sprite):
         self.life = self.defaultlife
 
     def update(self):
-        self.life = self.life - 1
+        self.life -= 1
         self.image = self.images[self.life // self.animcycle % 2]
         if self.life <= 0: self.kill()
 
@@ -410,7 +406,7 @@ class SteeringGraph:
     GRAPH_HEIGHT = 150
 
     def __init__(self, gid, name, steering, screen):
-        ''' Here is where we'll put all of the graphing data '''
+        # Here is where we'll put all of the graphing data
         self._name = name
         self._gid = gid
         self._steering = steering
@@ -420,7 +416,7 @@ class SteeringGraph:
         self._cmd_req = deque([], self._screen.get_width())
 
     def graph(self):
-        ''' This is where we'll graph the stuff '''
+        # This is where we'll graph the stuff
         self._cmd_d.append(self._steering.cmd_d)
         self._cmd_req.append(self._steering.cmd_req)
         self.draw_joystick_command()
@@ -503,7 +499,7 @@ def main():
     myFont = pygame.font.Font(pygame.font.match_font("consolas"), 16)
 
     #Setup some game variables
-    EasterEggMode = False;
+    EasterEggMode = False
     Ls3Reload = LS3_RELOAD
 
     # Count the joysticks the computer has
@@ -532,9 +528,9 @@ def main():
 
     print wildcat.alive()
 
-    pygame.key.set_repeat() # Disables key repeats.
+    pygame.key.set_repeat()  # Disables key repeats.
 
-    while not done: # wildcat.alive():
+    while not done:  # wildcat.alive():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT or \
@@ -553,7 +549,7 @@ def main():
             if Ls3Reload:
                 Ls3Reload -= 1
             elif not int(random.random() * LS3_ODDS):
-                LS3((random.randint(0,SCREEN_WIDTH),random.randint(0,SCREEN_HEIGHT)))
+                LS3((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)))
                 Ls3Reload = LS3_RELOAD
 
 
