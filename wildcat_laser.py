@@ -2,7 +2,7 @@ import math
 
 import pygame
 
-from wildcat_driving_tester import Meter2PixSprite
+from .wildcat_driving_tester import Meter2PixSprite
 
 
 class Laser(Meter2PixSprite):

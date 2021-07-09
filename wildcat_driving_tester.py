@@ -44,7 +44,7 @@ def load_image(filename, colorkey=None):
     filename = os.path.join(main_dir, filename)
     try:
         surface = pygame.image.load(filename)
-    except pygame.error, message:
+    except pygame.error as message:
         raise SystemExit('Could not load image "%s" %s' % (filename, pygame.get_error()))
     image = surface.convert()
     if colorkey is not None:
@@ -526,7 +526,7 @@ def main():
 
     done = False
 
-    print wildcat.alive()
+    print(wildcat.alive())
 
     pygame.key.set_repeat()  # Disables key repeats.
 
@@ -627,7 +627,7 @@ def main():
         pygame.display.flip()
         clock.tick(FPS)
 
-    print lasers
+    print(lasers)
 
     pygame.quit()
 
