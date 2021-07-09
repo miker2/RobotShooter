@@ -1,5 +1,27 @@
+from dataclasses import dataclass
+import platform
+
 from wildcat_utils import *
 
+@dataclass(frozen=True)
+class JoystickConfig:
+    X_AXIS : int
+    Y_AXIS : int
+    RZ_AXIS : int
+    LBUMP : int
+    RBUMP : int
+    X_INV : bool = True
+    Y_INV : bool = False
+    RZ_INV : bool = True
+
+
+_JOYSTICK_CFG = {
+    "Darwin" : JoystickConfig(X_AXIS=3, Y_AXIS=2, RZ_AXIS=0, LBUMP=6, RBUMP=7),
+    "Linux" : JoystickConfig(X_AXIS=4, Y_AXIS=3, RZ_AXIS=0, LBUMP=4, RBUMP=5),
+    "Windows" : JoystickConfig(X_AXIS=3, Y_AXIS=2, RZ_AXIS=0, LBUMP=4, RBUMP=5)
+    }
+
+JOYSTICK_CFG = _JOYSTICK_CFG[platform.system()]
 
 class SteeringProcessor:
     def __init__(self, cmd_min, cmd_max, cmd_slew_limit):

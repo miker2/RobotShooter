@@ -2,6 +2,7 @@ import random
 import os.path
 import copy
 from collections import deque
+import platform
 
 import pygame
 
@@ -26,7 +27,7 @@ SCREEN_WIDTH = 1080
 SCREEN_HEIGHT = 720
 GRID_SPACING = int(5.0 * PIXELS_PER_METER)
 
-FPS = 30.0
+FPS = 60.0
 
 MIN_LASER_AGE = 1 / 6.0
 MAX_SHOTS = 10
@@ -118,9 +119,6 @@ class Meter2PixSprite(pygame.sprite.Sprite):
 # The WildCat object isn't a true sprite type because it doesn't use an image to draw itself, 
 # but it works for now
 class WildCat(Meter2PixSprite):
-    RZAXIS = 0
-    XAXIS = 3
-    YAXIS = 4
     DBAND = 0.1
     YDDBAND = 0.1
     XVEL_SCALE = -9.0 / (1 - DBAND)
@@ -218,9 +216,9 @@ class WildCat(Meter2PixSprite):
 
     def process_joystick(self):
         # Get the requested speeds from the joystick
-        xd_req = self.XVEL_SCALE * deadband(self._joy.get_axis(self.XAXIS), -self.DBAND, self.DBAND)
-        yd_req = self.YVEL_SCALE * deadband(self._joy.get_axis(self.YAXIS), -self.YDDBAND, self.YDDBAND)
-        rzd_req = self.RZD_SCALE * deadband(self._joy.get_axis(self.RZAXIS), -self.DBAND, self.DBAND)
+        xd_req = self.XVEL_SCALE * deadband(self._joy.get_axis(JOYSTICK_CFG.X_AXIS), -self.DBAND, self.DBAND)
+        yd_req = self.YVEL_SCALE * deadband(self._joy.get_axis(JOYSTICK_CFG.Y_AXIS), -self.YDDBAND, self.YDDBAND)
+        rzd_req = self.RZD_SCALE * deadband(self._joy.get_axis(JOYSTICK_CFG.RZ_AXIS), -self.DBAND, self.DBAND)
         # Apply slew rate limits to get the desired speeds
         # do some xd_limit hacks:
         dt = self._clock.get_time() / 1000.0
@@ -557,12 +555,9 @@ def main():
 
         # As long as there is a joystick
         if joystick_count != 0:
-            # if (my_joystick.get_button(4) or my_joystick.get_button(5)):
-            #     print "Do no lasers exist?  ", not lasers
-            #     print "There are %d lasers." % len(lasers)
-            #     print wildcat.reloading
-            if (my_joystick.get_button(4) or my_joystick.get_button(5) or keystate[pygame.K_SPACE]) and (
-                not wildcat.reloading) and (len(lasers) < MAX_SHOTS):
+            if (my_joystick.get_button(JOYSTICK_CFG.LBUMP) or my_joystick.get_button(JOYSTICK_CFG.RBUMP) \
+                or keystate[pygame.K_SPACE]) and \
+                (not wildcat.reloading) and (len(lasers) < MAX_SHOTS):
                 Laser(wildcat, screen.subsurface(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), clock)
 
         dt = clock.get_time() / 1000.0
